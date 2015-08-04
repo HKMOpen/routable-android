@@ -8,6 +8,7 @@ import junit.framework.Assert;
 
 import android.app.ListActivity;
 import android.content.Intent;
+import android.os.Bundle;
 import android.test.AndroidTestCase;
 
 public class RouterTest extends AndroidTestCase {
@@ -70,11 +71,13 @@ public class RouterTest extends AndroidTestCase {
 	}
 
 	public void test_code_callbacks() {
-		Router router = new Router();
+		Router router = new Router(this.getContext());
 		router.map("callback", new Router.RouterCallback() {
 			@Override
-			public void run(Map<String, String> params) {
+			public void run(Router.RouteContext context) {
 				RouterTest.this._called = true;
+
+                Assert.assertNotNull(context.getContext());
 			}
 		});
 
@@ -84,16 +87,34 @@ public class RouterTest extends AndroidTestCase {
 	}
 
 	public void test_code_callbacks_with_params() {
-		Router router = new Router();
+		Router router = new Router(this.getContext());
 		router.map("callback/:id", new Router.RouterCallback() {
 			@Override
-			public void run(Map<String, String> params) {
+			public void run(Router.RouteContext context) {
 				RouterTest.this._called = true;
-				Assert.assertEquals("123", params.get("id"));
+				Assert.assertEquals("123", context.getParams().get("id"));
 			}
 		});
 
 		router.open("callback/123");
+
+		Assert.assertTrue(this._called);
+	}
+
+	public void test_code_callbacks_with_extras() {
+		Router router = new Router(this.getContext());
+		router.map("callback/:id", new Router.RouterCallback() {
+            @Override
+            public void run(Router.RouteContext context) {
+                RouterTest.this._called = true;
+                Assert.assertEquals("value", context.getExtras().getString("test"));
+            }
+        });
+
+        Bundle extras = new Bundle();
+        extras.putString("test", "value");
+
+		router.open("callback/123", extras);
 
 		Assert.assertTrue(this._called);
 	}
@@ -104,6 +125,48 @@ public class RouterTest extends AndroidTestCase {
 
         Intent intent = router.intentFor("/users");
         Assert.assertNull(intent.getExtras());
+    }
+
+    public void test_url_querystring() {
+        Router router = new Router();
+        router.map("/users/:id", ListActivity.class);
+
+        Intent intent = router.intentFor("/users/123?key1=val2");
+        Bundle extras = intent.getExtras();
+
+        Assert.assertEquals("123", extras.getString("id"));
+        Assert.assertEquals("val2", extras.getString("key1"));
+    }
+
+    public void test_url_containing_spaces() {
+        Router router = new Router();
+        router.map("/path+entry/:id", ListActivity.class);
+
+        Intent intent = router.intentFor("/path+entry/123");
+        Bundle extras = intent.getExtras();
+
+        Assert.assertEquals("123", extras.getString("id"));
+    }
+
+    public void test_url_querystring_with_encoded_value() {
+        Router router = new Router();
+        router.map("/users/:id", ListActivity.class);
+
+        Intent intent = router.intentFor("/users/123?key1=val+1&key2=val%202");
+        Bundle extras = intent.getExtras();
+
+        Assert.assertEquals("val 1", extras.getString("key1"));
+        Assert.assertEquals("val 2", extras.getString("key2"));
+    }
+
+    public void test_url_querystring_without_value() {
+        Router router = new Router();
+        router.map("/users/:id", ListActivity.class);
+
+        Intent intent = router.intentFor("/users/123?val1");
+        Bundle extras = intent.getExtras();
+
+        Assert.assertTrue(extras.containsKey("val1"));
     }
 
     public void test_url_starting_with_slash_with_params() {
